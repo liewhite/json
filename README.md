@@ -1,8 +1,21 @@
-## sbt project compiled with Scala 3
+# Another Json Lib for scala 3
+TL;DR:
+* based on circe-core (string <-> Json)
+* implement union type auto deriving
+* enum empty case encode to string
+* plugins support
 
-### Usage
 
-This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
+## examples
+### Union type
+```scala
+import io.github.liewhite.json.JsonBehavior.*
 
-For more information on the sbt-dotty plugin, see the
-[scala3-example-project](https://github.com/scala/scala3-example-project/blob/main/README.md).
+@main def main = {
+    val o: Int | String | Boolean = true
+    val s = o.encode
+    println(s.noSpaces)
+
+    s.decode[Int|Boolean].foreach(println)
+}
+```
