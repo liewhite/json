@@ -2,7 +2,7 @@
 TL;DR:
 * based on circe-core (string <-> Json)
 * implement union type auto deriving
-* enum empty case encode to string
+* enum singleton case encode to string
 * plugins support
 
 ## Dependency
