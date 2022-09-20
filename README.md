@@ -5,6 +5,10 @@ TL;DR:
 * enum empty case encode to string
 * plugins support
 
+## Dependency
+```scala
+libraryDependencies += "io.github.liewhite" %% "json" % "0.2.0"
+```
 
 ## examples
 ### Union type
