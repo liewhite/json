@@ -4,7 +4,6 @@ import scala.math.{BigDecimal, BigInt}
 import scala.jdk.CollectionConverters.*
 import scala.deriving.*
 import scala.quoted.*
-import scala.compiletime.*
 import scala.util.NotGiven
 
 import shapeless3.deriving.{K0, Continue, Labelling}
@@ -21,34 +20,9 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.ZonedDateTime
 
-trait Encoder[T] extends CoproductEncoder{
+trait Encoder[T] extends CoproductEncoder {
   def encode(t: T): Json
 }
-
-trait UnionEncoder
-object UnionEncoder:
-  inline given union[T]: Encoder[T] = ${ impl[T] }
-
-  def impl[T: Type](using q: Quotes): Expr[Encoder[T]] =
-    import q.reflect._
-
-    val repr = TypeRepr.of[T];
-    repr match
-      case OrType(a, b) =>
-        (a.asType, b.asType) match
-          case ('[t1], '[t2]) =>
-            '{
-              new Encoder[T] {
-                def encode(t: T) =
-                  val o1 = summonInline[Encoder[t1]]
-                  val o2 = summonInline[Encoder[t2]]
-                  t match
-                    case o: t1 => o1.encode(o)
-                    case o: t2 => o2.encode(o)
-              }
-            }
-      case other =>
-        report.error(s"not support type:,$other"); ???
 
 trait CoproductEncoder extends UnionEncoder
 object CoproductEncoder {
@@ -67,7 +41,6 @@ object CoproductEncoder {
         )
 }
 
-
 object Encoder:
   inline def derived[A](using gen: K0.Generic[A]): Encoder[A] =
     gen.derive(product, CoproductEncoder.coproduct)
@@ -84,11 +57,13 @@ object Encoder:
         // 没有成员的product， 按照singleton处理
         if (fieldsName.isEmpty) then Json.fromString(labelling.label)
         else {
-          val elems: List[Json] = inst.foldLeft(t)(List.empty[Json])(
-            [t] =>
-              (acc: List[Json], st: Encoder[t], t: t) =>
-                Continue(st.encode(t) :: acc)
-          ).reverse
+          val elems: List[Json] = inst
+            .foldLeft(t)(List.empty[Json])(
+              [t] =>
+                (acc: List[Json], st: Encoder[t], t: t) =>
+                  Continue(st.encode(t) :: acc)
+            )
+            .reverse
           val rawJson = Json.fromFields(fieldsName.zip(elems).toMap)
           val afterFieldEncode = fieldsName
             .zip(fieldAnns())

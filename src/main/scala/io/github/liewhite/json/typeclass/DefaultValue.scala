@@ -17,8 +17,9 @@ trait DefaultValue[T]:
 object DefaultValue{
   inline given [T]: DefaultValue[T] = mkDefaultValue[T]
 
-  inline def mkDefaultValue[T]: DefaultValue[T] =
+  inline def mkDefaultValue[T]: DefaultValue[T] = {
     ${mkDefaultValueMacro[T]}
+  }
 
   def mkDefaultValueMacro[T: Type](using Quotes): Expr[DefaultValue[T]] = {
     import quotes.reflect.*
@@ -62,9 +63,10 @@ object DefaultValue{
 
   }
   def mkGiven[T](names: List[String], values: List[Json]): DefaultValue[T] = {
-    new DefaultValue:
+    new DefaultValue {
       def defaults = {
         names.zip(values).toMap
       }
+    }
   }
 }

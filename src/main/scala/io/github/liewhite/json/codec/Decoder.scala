@@ -11,85 +11,45 @@ import shapeless3.deriving.*
 import io.github.liewhite.json.annotations.*
 import io.github.liewhite.json.typeclass.*
 
-
 import io.circe.Json
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.ZonedDateTime
 
-
-trait Decoder[T] extends ProductDecoder{
+trait Decoder[T] extends ProductDecoder {
   def decode(
       data: Json,
       withDefaults: Boolean = true
   ): Either[DecodeException, T]
 }
 
-
-trait MacroDecoder
-object MacroDecoder:
-  inline given union[T](using NotGiven[Decoder[T]]): Decoder[T] = ${ impl[T] }
-
-  def impl[T: Type](using q: Quotes): Expr[Decoder[T]] =
-    import q.reflect._
-
-    val repr = TypeRepr.of[T];
-    repr match
-      case OrType(a, b) =>
-        (a.asType, b.asType) match
-          case ('[t1], '[t2]) =>
-            '{
-              new Decoder[T] {
-                def decode(data: Json, withDefaults: Boolean = true) = {
-                  val o1 = summonInline[Decoder[t1]]
-                  val o2 = summonInline[Decoder[t2]]
-                  // 先不用默认值进行decode，如果失败了再用默认值试一次， 避免union type 第一个type有默认值总是成功，即使应该返回第二个type
-                  o1.decode(data, false) match {
-                    case Right(o) => Right(o.asInstanceOf[T])
-                    case Left(_) =>
-                      o2.decode(data, false) match {
-                        case Right(o) => Right(o.asInstanceOf[T])
-                        case Left(e) => {
-                          if (!withDefaults) {
-                            Left(e)
-                          } else {
-                            o1.decode(data) match {
-                              case Right(o) => Right(o.asInstanceOf[T])
-                              case Left(_) =>
-                                o2.decode(data).map(_.asInstanceOf[T])
-                            }
-                          }
-                        }
-                      }
-                  }
-                }
-              }
-            }
-      case other =>
-        report.error(s"not support type:,$other"); ???
-
 // 对于Enum 的case， SumOf和ProductOf都可以满足， 不通过继承区分优先级的话，就会出错
-trait CoproductDecoder extends MacroDecoder
+// fixed in scala v3.1.3
+trait CoproductDecoder extends UnionDecoder
 
-object CoproductDecoder:
-  /** 先
-    */
+object CoproductDecoder {
   given coproduct[T](using
       inst: => K0.CoproductInstances[Decoder, T],
       labelling: Labelling[T]
-  ): Decoder[T] =
-    new Decoder[T]:
+  ): Decoder[T] = {
+    new Decoder[T] {
       def decode(
           data: Json,
           withDefaults: Boolean = true
-      ): Either[DecodeException, T] =
-        def decodePhase(inst: K0.CoproductInstances[Decoder, T], labelling: Labelling[T],data:Json, withDefaults: Boolean): Option[T] = {
+      ): Either[DecodeException, T] = {
+        def decodePhase(
+            inst: K0.CoproductInstances[Decoder, T],
+            labelling: Labelling[T],
+            data: Json,
+            withDefaults: Boolean
+        ): Option[T] = {
           val result = labelling.elemLabels.zipWithIndex.iterator
             .map((p: (String, Int)) => {
               val (label, i) = p
               inst.project[Json](i)(data)(
                 [t] =>
-                  (s: Json, rt: Decoder[t]) => (data, rt.decode(s,withDefaults).toOption)
+                  (s: Json, rt: Decoder[t]) =>
+                    (data, rt.decode(s, withDefaults).toOption)
               ) match
                 case (s, None)     => None
                 case (tl, Some(t)) => Some(t)
@@ -99,11 +59,10 @@ object CoproductDecoder:
           result
         }
 
-        if data.isString then
+        if (data.isString) {
           val ordinal = labelling.elemLabels.indexOf(data.asString.get)
           inst.project[Json](ordinal)(data)(
-            [t] =>
-              (s: Json, rt: Decoder[t]) => (s, rt.decode(data).toOption)
+            [t] => (s: Json, rt: Decoder[t]) => (s, rt.decode(data).toOption)
           ) match
             case (s, None) =>
               Left(
@@ -112,24 +71,28 @@ object CoproductDecoder:
                 )
               )
             case (tl, Some(t)) => Right(t)
-        else
-         // 可能排在前面的case每个field都有默认值， 就匹配不到真正符合条件的case了
-          val result = decodePhase(inst,labelling, data, false)
+        } else {
+          // 可能排在前面的case每个field都有默认值， 就匹配不到真正符合条件的case了
+          val result = decodePhase(inst, labelling, data, false)
           result match {
             case Some(v) => Right(v)
             case None => {
-              val secondChance = decodePhase(inst,labelling,data,true)
+              val secondChance = decodePhase(inst, labelling, data, true)
               secondChance match {
                 case Some(v) => Right(v)
-                case None => 
+                case None =>
                   Left(DecodeException("can't decode :" + labelling.label))
               }
             }
           }
-
+        }
+      }
+    }
+  }
+}
 
 trait ProductDecoder extends CoproductDecoder
-object ProductDecoder{
+object ProductDecoder {
   given product[T](using
       inst: => K0.ProductInstances[Decoder, T],
       labelling: Labelling[T],
@@ -159,8 +122,7 @@ object ProductDecoder{
                   Map.empty[String, Json]
                 )
               else throw new DecodeException("label not equals enum name")
-            else if data.isObject then
-              data
+            else if data.isObject then data
             else
               throw new DecodeException(
                 s"expect product, got: ${data.toString}"
@@ -181,7 +143,8 @@ object ProductDecoder{
             [t] =>
               (itemDecoder: Decoder[t]) => {
                 // val jsonData = afterFieldsAnns.asObject.get.apply(fieldsName(index))
-                val jsonData = afterObjAnns.asObject.get.apply(fieldsName(index))
+                val jsonData =
+                  afterObjAnns.asObject.get.apply(fieldsName(index))
                 // 处理默认值
                 val value = jsonData match {
                   case None =>
@@ -203,7 +166,7 @@ object ProductDecoder{
           )
           Right(result)
         }
-        try{
+        try {
           decodePhase[T](
             inst,
             data,
@@ -211,7 +174,7 @@ object ProductDecoder{
             if withDefaults then defaults.defaults
             else Map.empty[String, Json]
           )
-        }catch{
+        } catch {
           case e: DecodeException => Left(e)
         }
 
@@ -221,7 +184,10 @@ object Decoder:
   def decodeError(expect: String, got: Json) = Left(
     DecodeException(s"expect $expect, but ${got.toString} found")
   )
-  inline def derived[T](using gen: K0.Generic[T], labelling: Labelling[T]): Decoder[T] =
+  inline def derived[T](using
+      gen: K0.Generic[T],
+      labelling: Labelling[T]
+  ): Decoder[T] =
     gen.derive(ProductDecoder.product, CoproductDecoder.coproduct)
 
   def decodeSeq[T](data: Json, withDefaults: Boolean = true)(using
@@ -242,8 +208,8 @@ object Decoder:
         withDefaults: Boolean = true
     ): Either[DecodeException, Map[String, T]] =
       if data.isObject then
-        val decodedArray = data.asObject.get.toMap.map {
-          case (k,v) => (k, innerDecoder.decode(v))
+        val decodedArray = data.asObject.get.toMap.map { case (k, v) =>
+          (k, innerDecoder.decode(v))
         }
         val failed = decodedArray.find(_._2.isLeft)
         failed match
@@ -255,7 +221,10 @@ object Decoder:
   given Decoder[EmptyTuple] with
     def decode(data: Json, withDefaults: Boolean = true) = Right(EmptyTuple)
 
-  given [H, T <:Tuple](using headEncoder: => Decoder[H], tailEncoder: => Decoder[T]): Decoder[H *: T] with
+  given [H, T <: Tuple](using
+      headEncoder: => Decoder[H],
+      tailEncoder: => Decoder[T]
+  ): Decoder[H *: T] with
     def decode(data: Json, withDefaults: Boolean = true) = {
       data.asArray match {
         case Some(a) => {
@@ -263,7 +232,7 @@ object Decoder:
             case Right(rh) => {
               tailEncoder.decode(Json.fromValues(a.tail)) match {
                 case Right(rt) => Right(rh *: rt)
-                case Left(l) => Left(l)
+                case Left(l)   => Left(l)
               }
             }
             case Left(l) => Left(l)
@@ -325,8 +294,8 @@ object Decoder:
     ): Either[DecodeException, BigInt] =
       data.asNumber.flatMap(_.toBigInt) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.JBigInt", data)
-      } 
+        case None    => decodeError("JsonNumber.JBigInt", data)
+      }
 
   given Decoder[BigDecimal] with
     def decode(
@@ -335,8 +304,8 @@ object Decoder:
     ): Either[DecodeException, BigDecimal] =
       data.asNumber.flatMap(_.toBigDecimal) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.BigDecimal", data)
-      } 
+        case None    => decodeError("JsonNumber.BigDecimal", data)
+      }
 
   given Decoder[Float] with
     def decode(
@@ -345,8 +314,8 @@ object Decoder:
     ): Either[DecodeException, Float] =
       data.asNumber.map(_.toFloat) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.float", data)
-      } 
+        case None    => decodeError("JsonNumber.float", data)
+      }
 
   given Decoder[Double] with
     def decode(
@@ -355,7 +324,7 @@ object Decoder:
     ): Either[DecodeException, Double] =
       data.asNumber.map(_.toDouble) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.double", data)
+        case None    => decodeError("JsonNumber.double", data)
       }
 
   given Decoder[Int] with
@@ -365,7 +334,7 @@ object Decoder:
     ): Either[DecodeException, Int] =
       data.asNumber.flatMap(_.toInt) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.int", data)
+        case None    => decodeError("JsonNumber.int", data)
       }
 
   given Decoder[Long] with
@@ -375,7 +344,7 @@ object Decoder:
     ): Either[DecodeException, Long] =
       data.asNumber.flatMap(_.toLong) match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.long", data)
+        case None    => decodeError("JsonNumber.long", data)
       }
 
   given Decoder[String] with
@@ -383,22 +352,22 @@ object Decoder:
         data: Json,
         withDefaults: Boolean = true
     ): Either[DecodeException, String] =
-      data.asString match{
+      data.asString match {
         case Some(n) => Right(n)
-        case None => decodeError("JsonNumber.string", data)
+        case None    => decodeError("JsonNumber.string", data)
       }
 
   given Decoder[LocalDateTime] with {
     def decode(
         data: Json,
         withDefaults: Boolean = true
-    ): Either[DecodeException, LocalDateTime] ={
+    ): Either[DecodeException, LocalDateTime] = {
       val dt = data.asString.map(str => {
         LocalDateTime.parse(str, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
       })
       dt match {
         case Some(n) => Right(n)
-        case None => decodeError("datetime ISO_LOCAL_DATE_TIME format",  data)
+        case None    => decodeError("datetime ISO_LOCAL_DATE_TIME format", data)
       }
     }
   }
@@ -406,13 +375,13 @@ object Decoder:
     def decode(
         data: Json,
         withDefaults: Boolean = true
-    ): Either[DecodeException, ZonedDateTime] ={
+    ): Either[DecodeException, ZonedDateTime] = {
       val dt = data.asString.map(str => {
         ZonedDateTime.parse(str, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
       })
       dt match {
         case Some(n) => Right(n)
-        case None => decodeError("datetime ISO_OFFSET_DATE_TIME format",  data)
+        case None => decodeError("datetime ISO_OFFSET_DATE_TIME format", data)
       }
     }
   }
