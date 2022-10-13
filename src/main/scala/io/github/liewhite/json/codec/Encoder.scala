@@ -198,12 +198,12 @@ object Encoder:
       Json.fromString(t.getMessage())
   }
 
-  // given[T](using te: Encoder[T]): Encoder[Try[T]] with {
-  //   def encode(t: Try[T]) =
-  //     Json.fromJsonObject((t match {
-  //       case Failure(exception) => JsonObject("failure" -> Json.fromString(exception.getMessage()))
-  //       case Success(value) => JsonObject("success"-> te.encode(value))
-  //     }))
-  // }
+  given[T](using te: Encoder[T]): Encoder[Try[T]] with {
+    def encode(t: Try[T]) =
+      Json.fromJsonObject((t match {
+        case Failure(exception) => JsonObject("failure" -> Json.fromString(exception.getMessage()))
+        case Success(value) => JsonObject("success"-> te.encode(value))
+      }))
+  }
 
 end Encoder

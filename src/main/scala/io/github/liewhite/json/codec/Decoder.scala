@@ -400,30 +400,30 @@ object Decoder:
       }
     }
   }
-  // given[T](using td: Decoder[T]): Decoder[Try[T]] with {
-  //   def decode(
-  //       data: Json,
-  //       withDefaults: Boolean = true
-  //   ): Either[DecodeException, Try[T]] = {
-  //     data.asObject.map(o => {
-  //       if(o.contains("success")) {
-  //         td.decode(o("success").get).map(Try(_))
-  //       }else if(o.contains("failure")) {
-  //         val result = for {
-  //           j <- o("failure")
-  //           s <- j.asString
-  //           result = Throwable(s)
-  //         } yield result
-  //         result match
-  //           case None => decodeError("try.failure must be string , got ", data)
-  //           case Some(value) => Right(Failure(value))
-  //       }else {
-  //         decodeError("Throwable repr must be string, got:", data)
-  //       }
-  //     }) match
-  //       case None => decodeError("try decode error, got:", data)
-  //       case Some(value) => value
-  //   }
-  // }
+  given[T](using td: Decoder[T]): Decoder[Try[T]] with {
+    def decode(
+        data: Json,
+        withDefaults: Boolean = true
+    ): Either[DecodeException, Try[T]] = {
+      data.asObject.map(o => {
+        if(o.contains("success")) {
+          td.decode(o("success").get).map(Try(_))
+        }else if(o.contains("failure")) {
+          val result = for {
+            j <- o("failure")
+            s <- j.asString
+            result = Throwable(s)
+          } yield result
+          result match
+            case None => decodeError("try.failure must be string , got ", data)
+            case Some(value) => Right(Failure(value))
+        }else {
+          decodeError("Throwable repr must be string, got:", data)
+        }
+      }) match
+        case None => decodeError("try decode error, got:", data)
+        case Some(value) => value
+    }
+  }
 
 class DecodeException(val message: String) extends Exception(message)

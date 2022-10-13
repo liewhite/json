@@ -160,14 +160,15 @@ class TestEncode:
     val s = a.encode
     assert(s == Json.fromString("1"))
     assert(s.decode[Throwable].toOption.get.getMessage() == "1")
-  // @Test
-  // def testTry =
-  //   val a = Try(1)
-  //   val s = a.encode
-  //   println(s)
-    // assert(s == Json.fromFields(Vector("success" -> Json.fromInt(1))))
-    // val f:Try[Int] = Failure(Throwable("1"))
-    // val fs = f.encode
-    // println(fs)
-    // assert(fs == Json.fromFields(Vector("failure" -> Json.fromString("1"))))
-    // assert(s.decode[Throwable].toOption.get.getMessage() == "1")
+
+  @Test
+  def testTry =
+    val a = Try(1)
+    val s = a.encode
+    assert(s == Json.fromFields(Vector("success" -> Json.fromInt(1))))
+
+    val f:Try[Int] = Failure(Throwable("1"))
+    val fs = f.encode
+    assert(fs == Json.fromFields(Vector("failure" -> Json.fromString("1"))))
+    assert(fs.decode[Try[Int]].toOption.get.isFailure)
+    assert(s.decode[Try[Int]].toOption.get.isSuccess)
