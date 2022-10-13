@@ -189,5 +189,9 @@ object Encoder:
     def encode(t: ZonedDateTime) =
       Json.fromString(t.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
   }
+  given Encoder[Throwable] with {
+    def encode(t: Throwable) =
+      Json.fromString(t.getMessage())
+  }
 
 end Encoder

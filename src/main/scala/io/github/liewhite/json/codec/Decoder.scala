@@ -385,5 +385,16 @@ object Decoder:
       }
     }
   }
+  given Decoder[Throwable] with {
+    def decode(
+        data: Json,
+        withDefaults: Boolean = true
+    ): Either[DecodeException, Throwable] = {
+      data.asString.map(Throwable(_)) match {
+        case Some(o) => Right(o)
+        case None => decodeError("Throwable repr must be string, got:", data)
+      }
+    }
+  }
 
 class DecodeException(val message: String) extends Exception(message)
