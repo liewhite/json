@@ -7,6 +7,8 @@ import io.github.liewhite.json.typeclass.RepeatableAnnotation
 import java.math.BigInteger
 import io.circe.Json
 import io.circe.parser._
+import scala.util.Try
+import scala.util.Failure
 
 case class A(a: Int = 1) derives Encoder, Decoder
 case class B(b: Int) derives Encoder, Decoder
@@ -151,3 +153,21 @@ class TestEncode:
     val a = (1, "a", true, 1.1)
     val s = a.encode
     assert(s.decode[(Int, String, Boolean, Double)] == Right(a))
+
+  @Test
+  def testThrowable =
+    val a = Throwable("1")
+    val s = a.encode
+    assert(s == Json.fromString("1"))
+    assert(s.decode[Throwable].toOption.get.getMessage() == "1")
+  // @Test
+  // def testTry =
+  //   val a = Try(1)
+  //   val s = a.encode
+  //   println(s)
+    // assert(s == Json.fromFields(Vector("success" -> Json.fromInt(1))))
+    // val f:Try[Int] = Failure(Throwable("1"))
+    // val fs = f.encode
+    // println(fs)
+    // assert(fs == Json.fromFields(Vector("failure" -> Json.fromString("1"))))
+    // assert(s.decode[Throwable].toOption.get.getMessage() == "1")
