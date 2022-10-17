@@ -87,6 +87,13 @@ object Encoder:
 
   }
 
+  /** unit encoder
+    */
+  given Encoder[Unit] with {
+    def encode(t: Unit): Json = {
+      Json.Null
+    }
+  }
   /** map encoder
     */
   given [T](using encoder: Encoder[T]): Encoder[Map[String, T]] with {
