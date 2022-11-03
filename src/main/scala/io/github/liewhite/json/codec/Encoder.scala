@@ -68,7 +68,8 @@ object Encoder:
                   Continue(st.encode(t) :: acc)
             )
             .reverse
-          val rawJson = Json.fromFields(fieldsName.zip(elems).toMap)
+          // val rawJson = Json.fromFields(fieldsName.zip(elems).toMap)
+          val rawJson = Json.fromFields(fieldsName.zip(elems).toMap.filter(!_._2.isNull))
           val afterFieldEncode = fieldsName
             .zip(fieldAnns())
             .foldLeft(rawJson)((acc, item) => {

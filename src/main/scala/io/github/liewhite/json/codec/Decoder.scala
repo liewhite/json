@@ -152,12 +152,15 @@ object ProductDecoder {
                 // 处理默认值
                 val value = jsonData match {
                   case None =>
-                    if defaultValues.contains(fieldsName(index)) then
+                    if(defaultValues.contains(fieldsName(index))){
                       defaultValues(fieldsName(index))
-                    else
-                      throw DecodeException(
-                        s"${label} key not exist: ${fieldsName(index)}"
-                      )
+                    }
+                    else {
+                      Json.Null
+                      // throw DecodeException(
+                      //   s"${label} key not exist: ${fieldsName(index)}"
+                      // )
+                    }
                   case Some(v) => v
                 }
                 val item = itemDecoder.decode(value) match {
