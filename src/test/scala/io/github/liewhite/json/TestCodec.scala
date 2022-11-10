@@ -30,9 +30,9 @@ enum E derives Encoder, Decoder:
   case C
 
 enum Dft derives Encoder, Decoder:
-  case A(a: Int = 1)
   case B(b: Int)
-  case C(b: Int)
+  case C(c: Int)
+  case A(a: Int = 1)
   case D
 
 class TestEncode:
@@ -85,14 +85,14 @@ class TestEncode:
 
   @Test
   def unionEncode =
-    val ab1: A | B | C = A()
-    val ab2: A | B | C = B(1)
-    val ab3: A | B | C = C(1)
+    val ab1: B | C | A = A()
+    val ab2: B | C | A = B(1)
+    val ab3: B | C | A = C(1)
     assert(ab1.encode.noSpaces == """{"a":1}""")
     assert(ab2.encode.noSpaces == """{"b":1}""")
-    assert(ab1.encode.decode[A | B | C].toOption.get == ab1)
-    assert(ab2.encode.decode[A | B | C].toOption.get == ab2)
-    assert(ab3.encode.decode[A | B | C].toOption.get == ab3)
+    assert(ab1.encode.decode[B | C | A].toOption.get == ab1)
+    assert(ab2.encode.decode[B | C | A].toOption.get == ab2)
+    assert(ab3.encode.decode[B | C | A].toOption.get == ab3)
     val a: UnionA | UnionB | UnionC = UnionA(1, "asd")
     val b: UnionA | UnionB | UnionC = UnionB(true, 1.2)
     val c: UnionA | UnionB | UnionC = UnionC(1.2, "c")
@@ -139,9 +139,9 @@ class TestEncode:
 
   @Test
   def testDecodeCoproductDefaultValue =
-    val a = Dft.B(1)
+    val a = Dft.A(1)
     val b = Dft.B(2)
-    val c = Dft.B(3)
+    val c = Dft.C(3)
     val d = Dft.D
     assert(a == a.encode.decode[Dft].toOption.get)
     assert(b == b.encode.decode[Dft].toOption.get)

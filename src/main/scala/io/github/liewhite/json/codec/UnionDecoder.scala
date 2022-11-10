@@ -18,25 +18,17 @@ object UnionDecoder {
           case ('[t1], '[t2]) =>
             '{
               new Decoder[T] {
-                def decode(data: Json, withDefaults: Boolean = true) = {
+                def decode(data: Json) = {
                   val o1 = summonInline[Decoder[t1]]
                   val o2 = summonInline[Decoder[t2]]
                   // 先不用默认值进行decode，如果失败了再用默认值试一次， 避免union type 第一个type有默认值总是成功，即使应该返回第二个type
-                  o1.decode(data, false) match {
+                  o1.decode(data) match {
                     case Right(o) => Right(o.asInstanceOf[T])
                     case Left(_) =>
-                      o2.decode(data, false) match {
+                      o2.decode(data) match {
                         case Right(o) => Right(o.asInstanceOf[T])
                         case Left(e) => {
-                          if (!withDefaults) {
                             Left(e)
-                          } else {
-                            o1.decode(data) match {
-                              case Right(o) => Right(o.asInstanceOf[T])
-                              case Left(_) =>
-                                o2.decode(data).map(_.asInstanceOf[T])
-                            }
-                          }
                         }
                       }
                   }

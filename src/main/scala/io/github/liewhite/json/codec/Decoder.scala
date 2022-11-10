@@ -22,8 +22,7 @@ import scala.util.Failure
 
 trait Decoder[T] extends ProductDecoder {
   def decode(
-      data: Json,
-      withDefaults: Boolean = true
+      data: Json
   ): Either[DecodeException, T]
 }
 
@@ -39,21 +38,19 @@ object CoproductDecoder {
     new Decoder[T] {
       def decode(
           data: Json,
-          withDefaults: Boolean = true
+          
       ): Either[DecodeException, T] = {
         def decodePhase(
             inst: K0.CoproductInstances[Decoder, T],
             labelling: Labelling[T],
-            data: Json,
-            withDefaults: Boolean
+            data: Json
         ): Option[T] = {
           val result = labelling.elemLabels.zipWithIndex.iterator
             .map((p: (String, Int)) => {
-              val (label, i) = p
+              val i = p._2
               inst.project[Json](i)(data)(
                 [t] =>
-                  (s: Json, rt: Decoder[t]) =>
-                    (data, rt.decode(s, withDefaults).toOption)
+                  (s: Json, rt: Decoder[t]) => (data, rt.decode(s).toOption)
               ) match
                 case (s, None)     => None
                 case (tl, Some(t)) => Some(t)
@@ -77,17 +74,12 @@ object CoproductDecoder {
             case (tl, Some(t)) => Right(t)
         } else {
           // 可能排在前面的case每个field都有默认值， 就匹配不到真正符合条件的case了
-          val result = decodePhase(inst, labelling, data, false)
+          val result = decodePhase(inst, labelling, data)
+
           result match {
             case Some(v) => Right(v)
-            case None => {
-              val secondChance = decodePhase(inst, labelling, data, true)
-              secondChance match {
-                case Some(v) => Right(v)
-                case None =>
-                  Left(DecodeException("can't decode :" + labelling.label))
-              }
-            }
+            case None =>
+              Left(DecodeException("can't decode :" + labelling.label))
           }
         }
       }
@@ -107,7 +99,7 @@ object ProductDecoder {
     new Decoder[T]:
       def decode(
           data: Json,
-          withDefaults: Boolean = true
+          
       ): Either[DecodeException, T] =
         def decodePhase[T](
             inst: K0.ProductInstances[Decoder, T],
@@ -152,14 +144,10 @@ object ProductDecoder {
                 // 处理默认值
                 val value = jsonData match {
                   case None =>
-                    if(defaultValues.contains(fieldsName(index))){
+                    if (defaultValues.contains(fieldsName(index))) {
                       defaultValues(fieldsName(index))
-                    }
-                    else {
+                    } else {
                       Json.Null
-                      // throw DecodeException(
-                      //   s"${label} key not exist: ${fieldsName(index)}"
-                      // )
                     }
                   case Some(v) => v
                 }
@@ -178,8 +166,7 @@ object ProductDecoder {
             inst,
             data,
             labelling,
-            if withDefaults then defaults.defaults
-            else Map.empty[String, Json]
+            defaults.defaults
           )
         } catch {
           case e: DecodeException => Left(e)
@@ -197,7 +184,7 @@ object Decoder:
   ): Decoder[T] =
     gen.derive(ProductDecoder.product, CoproductDecoder.coproduct)
 
-  def decodeSeq[T](data: Json, withDefaults: Boolean = true)(using
+  def decodeSeq[T](data: Json)(using
       innerDecoder: Decoder[T]
   ): Either[DecodeException, List[T]] =
     if data.isArray then
@@ -211,8 +198,7 @@ object Decoder:
 
   given [T](using innerDecoder: Decoder[T]): Decoder[Map[String, T]] with
     def decode(
-        data: Json,
-        withDefaults: Boolean = true
+        data: Json
     ): Either[DecodeException, Map[String, T]] =
       if data.isObject then
         val decodedArray = data.asObject.get.toMap.map { case (k, v) =>
@@ -226,13 +212,13 @@ object Decoder:
       else decodeError("Json.JObject", data)
 
   given Decoder[EmptyTuple] with
-    def decode(data: Json, withDefaults: Boolean = true) = Right(EmptyTuple)
+    def decode(data: Json) = Right(EmptyTuple)
 
   given [H, T <: Tuple](using
       headEncoder: => Decoder[H],
       tailEncoder: => Decoder[T]
   ): Decoder[H *: T] with
-    def decode(data: Json, withDefaults: Boolean = true) = {
+    def decode(data: Json) = {
       data.asArray match {
         case Some(a) => {
           headEncoder.decode(a.head) match {
@@ -254,7 +240,7 @@ object Decoder:
   given Decoder[Unit] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Unit] = {
       Right(())
     }
@@ -262,7 +248,7 @@ object Decoder:
   given Decoder[Json] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Json] = {
       Right(data)
 
@@ -271,28 +257,28 @@ object Decoder:
   given [T: Decoder]: Decoder[List[T]] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, List[T]] =
       decodeSeq[T](data)
 
   given [T: Decoder]: Decoder[Vector[T]] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Vector[T]] =
       decodeSeq[T](data).map(_.toVector)
 
   given [T: Decoder: ClassTag]: Decoder[Array[T]] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Array[T]] =
       decodeSeq[T](data).map(_.toSeq.toArray)
 
   given [T](using innerDecoder: Decoder[T]): Decoder[Option[T]] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Option[T]] =
       innerDecoder.decode(data) match
         case Right(v) => Right(Some(v))
@@ -301,7 +287,7 @@ object Decoder:
   given Decoder[Boolean] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Boolean] =
       if data.isBoolean then Right(data.asBoolean.get)
       else decodeError("Json.JBool", data)
@@ -309,7 +295,7 @@ object Decoder:
   given Decoder[BigInt] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, BigInt] =
       data.asNumber.flatMap(_.toBigInt) match {
         case Some(n) => Right(n)
@@ -319,7 +305,7 @@ object Decoder:
   given Decoder[BigDecimal] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, BigDecimal] =
       data.asNumber.flatMap(_.toBigDecimal) match {
         case Some(n) => Right(n)
@@ -329,7 +315,7 @@ object Decoder:
   given Decoder[Float] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Float] =
       data.asNumber.map(_.toFloat) match {
         case Some(n) => Right(n)
@@ -339,7 +325,7 @@ object Decoder:
   given Decoder[Double] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Double] =
       data.asNumber.map(_.toDouble) match {
         case Some(n) => Right(n)
@@ -349,7 +335,7 @@ object Decoder:
   given Decoder[Int] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Int] =
       data.asNumber.flatMap(_.toInt) match {
         case Some(n) => Right(n)
@@ -359,7 +345,7 @@ object Decoder:
   given Decoder[Long] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Long] =
       data.asNumber.flatMap(_.toLong) match {
         case Some(n) => Right(n)
@@ -369,7 +355,7 @@ object Decoder:
   given Decoder[String] with
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, String] =
       data.asString match {
         case Some(n) => Right(n)
@@ -379,7 +365,7 @@ object Decoder:
   given Decoder[LocalDateTime] with {
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, LocalDateTime] = {
       val dt = data.asString.map(str => {
         LocalDateTime.parse(str, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
@@ -393,7 +379,7 @@ object Decoder:
   given Decoder[ZonedDateTime] with {
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, ZonedDateTime] = {
       val dt = data.asString.map(str => {
         ZonedDateTime.parse(str, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -407,7 +393,7 @@ object Decoder:
   given Decoder[Throwable] with {
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Throwable] = {
       data.asString.map(Throwable(_)) match {
         case Some(o) => Right(o)
@@ -418,7 +404,7 @@ object Decoder:
   given [T](using td: Decoder[T]): Decoder[Try[T]] with {
     def decode(
         data: Json,
-        withDefaults: Boolean = true
+        
     ): Either[DecodeException, Try[T]] = {
       data.asObject.map(o => {
         if (o.contains("success")) {
